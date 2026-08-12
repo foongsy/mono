@@ -16,6 +16,7 @@
 - Q: When the user sends a follow-up message in the same thread, what conversation context should the agent receive? → A: Only the last N turns (fixed small window; N chosen at planning)
 - Q: When should the health/status endpoint report the backend as ready? → A: Process is listening (no LLM config/connectivity check)
 - Q: What language should the agent’s replies use when the user writes in Traditional Chinese? → A: Prefer Traditional Chinese replies for Traditional Chinese user input
+- Q: Can the user stop an in-progress streaming reply before it finishes? → A: No — v1 has no stop control; user waits for completion or failure
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -71,6 +72,7 @@ A developer or operator checks a backend health/status endpoint and learns wheth
 - What happens when the user submits an empty or whitespace-only message? The system MUST reject the send and MUST NOT create an empty user turn or start a stream.
 - What happens when the agent stream fails or disconnects mid-reply? The UI MUST show a clear error on that turn and MUST allow the user to send a new message afterward.
 - What happens when the user tries to send another message while a reply is still streaming? The system MUST prevent concurrent sends for the single thread (disable send or queue rejection) until the in-flight reply completes or fails.
+- What happens if the user wants to stop generation early? v1 MUST NOT provide a stop/cancel control; the user waits until the stream completes or fails.
 - What happens when the configured frontend backend address is wrong or unreachable? The UI MUST show a clear connection/error state when send is attempted (and health checks fail as in User Story 3).
 - What happens when the external LLM is unreachable, rejects credentials, or returns an error? The UI MUST show a clear error on that turn; the backend MUST NOT pretend the reply succeeded.
 - What happens on page refresh? Conversation history for v1 is session-only and MAY be lost; no durable restore is required.
@@ -91,7 +93,7 @@ A developer or operator checks a backend health/status endpoint and learns wheth
 - **FR-007**: The web interface MUST obtain the backend base address (or chat endpoint address) from an environment variable so the same frontend build can target different backend locations without code changes.
 - **FR-008**: The system MUST NOT require user login or authentication in v1.
 - **FR-009**: The system MUST NOT require a database for chat persistence in v1.
-- **FR-010**: The system MUST NOT include RAG, agent tools, file/attachment upload, or production deployment workflows in v1.
+- **FR-014**: v1 MUST NOT provide a user control to stop or cancel an in-progress streaming agent reply. The user MUST wait for stream completion or failure before the next send is allowed (see concurrent-send edge case).
 
 ### Key Entities
 
@@ -110,6 +112,7 @@ A developer or operator checks a backend health/status endpoint and learns wheth
 - **SC-003**: A user can complete two full exchanges (user message + completed agent reply) in the same thread without creating a second thread or leaving the page.
 - **SC-004**: 100% of health/status checks against a running listening backend return a healthy/ready (listening) indication; checks against a stopped backend do not return healthy/ready. Missing LLM credentials alone do not cause a failing health/status result while the process is listening.
 - **SC-005**: Changing only the documented frontend environment variable and restarting/reloading as required is sufficient to point the UI at a different backend address — no source edits required.
+- **SC-006**: Empty-message submit attempts produce zero new thread turns in manual verification.
 - **SC-007**: In manual verification with clear Traditional Chinese prompts, agent replies are predominantly Traditional Chinese (preferred language), not a wholly different natural language.
 
 ## Assumptions
@@ -123,4 +126,4 @@ A developer or operator checks a backend health/status endpoint and learns wheth
 - No multi-user isolation, sharing, export, or thread list is required.
 - Health/status means process listening only; it is for human and scripted checks during development and is not an LLM dependency probe. Public SLA/monitoring dashboards are out of scope (constitution observability applies when implementing, but production ops are excluded from this feature).
 - Frontend "endpoint via environment variable" applies to how the web app is configured at build or runtime for local/dev use — not to production secret management.
-- Out of scope remains binding: no login, database, RAG, tools, attachments, or production deployment work in this feature.
+- Out of scope remains binding: no login, database, RAG, tools, attachments, production deployment, or stream stop/cancel control in this feature.
