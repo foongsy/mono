@@ -14,6 +14,7 @@
 
 - Q: For v1 acceptance, what should produce the agent’s streamed reply? → A: Real external LLM required for v1 acceptance (credentials configured outside the app)
 - Q: When the user sends a follow-up message in the same thread, what conversation context should the agent receive? → A: Only the last N turns (fixed small window; N chosen at planning)
+- Q: When should the health/status endpoint report the backend as ready? → A: Process is listening (no LLM config/connectivity check)
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -51,16 +52,16 @@ After at least one exchange, the user sends another Traditional Chinese message 
 
 ### User Story 3 - Verify service readiness (Priority: P3)
 
-A developer or operator checks a backend health/status endpoint and learns whether the chat backend is reachable and ready to accept chat requests.
+A developer or operator checks a backend health/status endpoint and learns whether the chat backend process is reachable and listening. Readiness here does not imply LLM credentials or connectivity are valid.
 
 **Why this priority**: Required for local verification and acceptance criterion 2; not part of the end-user chat journey.
 
-**Independent Test**: Call the health/status endpoint while the backend is running and confirm a clear ready/unready signal; stop the backend and confirm the check fails or reports unready.
+**Independent Test**: Call the health/status endpoint while the backend is running and confirm a clear ready/listening signal; stop the backend and confirm the check fails or reports unready. Missing LLM credentials alone MUST NOT make this endpoint report unready.
 
 **Acceptance Scenarios**:
 
-1. **Given** the backend is running and ready, **When** someone requests the health/status endpoint, **Then** the response indicates a healthy/ready state in a machine-checkable way.
-2. **Given** the backend is not running, **When** someone requests the health/status endpoint, **Then** the check fails to obtain a healthy/ready response.
+1. **Given** the backend process is running and listening, **When** someone requests the health/status endpoint, **Then** the response indicates a healthy/ready (listening) state in a machine-checkable way — even if LLM credentials are missing or invalid.
+2. **Given** the backend process is not running, **When** someone requests the health/status endpoint, **Then** the check fails to obtain a healthy/ready response.
 
 ---
 
@@ -84,7 +85,7 @@ A developer or operator checks a backend health/status endpoint and learns wheth
 - **FR-004**: The web interface MUST display the user's message and the agent's streaming reply in the same single thread, updating the reply progressively as stream chunks arrive.
 - **FR-005**: The system MUST support multiple sequential turns within that one thread during a single browser page session.
 - **FR-012**: When invoking the agent for a new user message, the system MUST supply only the last N message turns from the thread as model context (a fixed small window). The concrete value of N is chosen during planning and MUST be documented; turns older than the window MAY remain visible in the UI but MUST NOT be required in the agent context.
-- **FR-006**: The backend MUST expose a health/status endpoint that reports whether the service is ready to accept chat traffic.
+- **FR-006**: The backend MUST expose a health/status endpoint that reports whether the backend process is listening. This endpoint MUST NOT require a successful LLM configuration or connectivity check to report ready.
 - **FR-007**: The web interface MUST obtain the backend base address (or chat endpoint address) from an environment variable so the same frontend build can target different backend locations without code changes.
 - **FR-008**: The system MUST NOT require user login or authentication in v1.
 - **FR-009**: The system MUST NOT require a database for chat persistence in v1.
@@ -96,7 +97,7 @@ A developer or operator checks a backend health/status endpoint and learns wheth
 - **Context Window (N turns)**: The fixed maximum number of most recent message turns sent to the agent on each request; N is a planning-time constant for v1.
 - **Message Turn**: One contribution in the thread — either from the user or from the agent — with ordered content; agent turns may be incomplete while streaming.
 - **Stream Chunk**: A partial piece of an agent reply delivered over time until the turn is complete or failed.
-- **Service Status**: The ready/not-ready signal exposed by the health/status endpoint.
+- **Service Status**: The listening/not-listening signal exposed by the health/status endpoint (process liveness only; not LLM readiness).
 
 ## Success Criteria *(mandatory)*
 
@@ -105,7 +106,7 @@ A developer or operator checks a backend health/status endpoint and learns wheth
 - **SC-001**: A user can open the chat UI, submit a Traditional Chinese message, and see the first streamed reply characters appear on screen within 3 seconds under normal local-network conditions (once the agent has begun responding).
 - **SC-002**: During a successful reply, the user can observe at least two distinct UI updates of the agent message content before the reply is marked complete (streaming is visible, not only a single final dump), except when the full reply is shorter than what would produce multiple chunks.
 - **SC-003**: A user can complete two full exchanges (user message + completed agent reply) in the same thread without creating a second thread or leaving the page.
-- **SC-004**: 100% of health/status checks against a running ready backend return a healthy/ready indication; checks against a stopped backend do not return healthy/ready.
+- **SC-004**: 100% of health/status checks against a running listening backend return a healthy/ready (listening) indication; checks against a stopped backend do not return healthy/ready. Missing LLM credentials alone do not cause a failing health/status result while the process is listening.
 - **SC-005**: Changing only the documented frontend environment variable and restarting/reloading as required is sufficient to point the UI at a different backend address — no source edits required.
 - **SC-006**: Empty-message submit attempts produce zero new thread turns in manual verification.
 
@@ -114,10 +115,10 @@ A developer or operator checks a backend health/status endpoint and learns wheth
 - Target users are developers or demo viewers using a desktop browser on a local or trusted network.
 - "串流回覆" means progressive delivery of reply text to the UI as it is produced, not a single all-at-once response after full generation (though very short replies may complete in one update).
 - The backend agent uses a real external LLM that can accept Traditional Chinese input and produce a textual reply suitable for display; exact model/provider choice is deferred to planning, but a stub/echo agent is not acceptable for v1 acceptance.
-- LLM API credentials are provided by the operator/developer outside the app codebase; missing or invalid credentials make the backend not ready for chat (see health/status expectations).
+- LLM API credentials are provided by the operator/developer outside the app codebase; missing or invalid credentials cause chat send/stream failures with a clear UI error, but do not by themselves make the health/status endpoint report unready.
 - v1 uses one anonymous single-thread session scoped to the browser page; refresh may clear history.
 - Agent context for each request is the last N turns only; full-history context is out of scope for v1. Exact N is deferred to planning but MUST be a small fixed integer.
 - No multi-user isolation, sharing, export, or thread list is required.
-- Health/status is for human and scripted checks during development; public SLA/monitoring dashboards are out of scope (constitution observability applies when implementing, but production ops are excluded from this feature).
+- Health/status means process listening only; it is for human and scripted checks during development and is not an LLM dependency probe. Public SLA/monitoring dashboards are out of scope (constitution observability applies when implementing, but production ops are excluded from this feature).
 - Frontend "endpoint via environment variable" applies to how the web app is configured at build or runtime for local/dev use — not to production secret management.
 - Out of scope remains binding: no login, database, RAG, tools, attachments, or production deployment work in this feature.
