@@ -31,8 +31,9 @@ Build a minimal Traditional Chinese agent chat web app over the **AG-UI protocol
 **Constraints**:
 - AG-UI wire protocol only (no custom SSE adapter)
 - Real external LLM; health = `GET /status` listening check
-- No stream cancel UI; N=10 turn context trim
-- Env-based AG-UI endpoint URL
+- No stream cancel UI; N=10 turn context trim via `TrimmingHttpAgent`
+- Env-based AG-UI endpoint URL: **`VITE_AGUI_URL` only**
+- CORS origins: `http://localhost:5173`, `http://127.0.0.1:5173`
 
 **Scale/Scope**: Single anonymous user, single thread, local/demo
 
@@ -92,10 +93,11 @@ frontend/
 │   │   └── assistant-ui/
 │   │       └── thread.tsx
 │   ├── runtime/
-│   │   ├── AgUiRuntimeProvider.tsx   # useAgUiRuntime + HttpAgent
+│   │   ├── AgUiRuntimeProvider.tsx   # useAgUiRuntime + TrimmingHttpAgent
+│   │   ├── trimming-http-agent.ts    # HttpAgent wrapper; applies N=10 trim
 │   │   └── trim-context.ts           # sliceLastNTurns(N=10)
 │   └── lib/
-│       └── env.ts                    # VITE_AGUI_URL
+│       └── env.ts                    # VITE_AGUI_URL only
 └── tests/
     └── trim-context.test.ts
 
@@ -132,12 +134,12 @@ See [research.md](./research.md):
 ## Implementation Notes (for `/speckit-tasks`)
 
 1. **Backend**: `AgentOS(agents=[chat_agent], interfaces=[AGUI(agent=chat_agent)])`; TC instructions; no `db`.
-2. **Frontend**: `HttpAgent({ url: env.VITE_AGUI_URL })` + `useAgUiRuntime({ agent })` + `Thread`.
-3. **Context trim**: Wrap agent or intercept run input — keep last 10 turns in `messages`.
-4. **Health**: `make health` → `curl -sf $AGENTOS_URL/status`.
-5. **CORS**: Enable for frontend origin on AgentOS FastAPI app.
+2. **Frontend**: `TrimmingHttpAgent` (wraps `HttpAgent`, N=10) + `useAgUiRuntime({ agent })` + `Thread` (no stop control).
+3. **Context trim**: `sliceLastNTurns` in `trim-context.ts`; applied only inside `TrimmingHttpAgent` before send.
+4. **Health**: `make health` → `curl -sf $AGENTOS_BASE/status` (wired once in foundational Makefile task).
+5. **CORS**: Allow `http://localhost:5173` and `http://127.0.0.1:5173` on AgentOS app.
 6. **No cancel UI**: Do not wire stop/cancel actions (FR-014).
-7. **Env**: `VITE_AGUI_URL=http://localhost:7777/agui`, `OPENAI_API_KEY`, `OPENAI_MODEL`.
+7. **Env**: **`VITE_AGUI_URL=http://localhost:7777/agui` only** (no `VITE_AGENTOS_URL`), plus `OPENAI_API_KEY`, `OPENAI_MODEL`.
 
 ## Next Command
 

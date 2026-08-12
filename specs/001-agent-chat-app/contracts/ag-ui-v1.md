@@ -132,13 +132,13 @@ const runtime = useAgUiRuntime({ agent, showThinking: false });
 
 Install: `npm install @assistant-ui/react @assistant-ui/react-ag-ui @ag-ui/client`
 
-Apply `sliceLastNTurns(messages, 10)` at run boundary (wrapper or hook) before `HttpAgent` sends input.
+**Context trim (canonical)**: Implement `TrimmingHttpAgent` in `frontend/src/runtime/trimming-http-agent.ts` that extends or wraps `@ag-ui/client` `HttpAgent` and overrides the run/send path to set `messages = sliceLastNTurns(messages, 10)` before the request is sent. `AgUiRuntimeProvider` MUST construct `useAgUiRuntime({ agent: new TrimmingHttpAgent(...) })` — do not rely on an undocumented `useAgUiRuntime` hook.
 
 ---
 
 ## 5. CORS
 
-AgentOS MUST allow frontend dev origin for `GET /status` and `POST /agui`.
+AgentOS MUST allow the Vite dev origin **`http://localhost:5173`** (and optionally `http://127.0.0.1:5173`) for `GET /status` and `POST /agui`.
 
 ---
 
@@ -146,13 +146,11 @@ AgentOS MUST allow frontend dev origin for `GET /status` and `POST /agui`.
 
 | Variable | Required | Example | Description |
 |----------|----------|---------|-------------|
-| `VITE_AGUI_URL` | yes | `http://localhost:7777/agui` | Full AG-UI run endpoint URL (FR-007) |
+| `VITE_AGUI_URL` | yes | `http://localhost:7777/agui` | Full AG-UI run endpoint URL (FR-007). **Canonical — do not use a separate base-URL variable.** |
 | `OPENAI_API_KEY` | yes (for chat) | `sk-...` | LLM credentials (FR-011) |
 | `OPENAI_MODEL` | no | `gpt-4o-mini` | Model id |
 | `AGENT_OS_HOST` | no | `0.0.0.0` | Bind host |
 | `AGENT_OS_PORT` | no | `7777` | Bind port |
-
-Alternative: `VITE_AGENTOS_URL=http://localhost:7777` with frontend appending `/agui` — document one canonical approach in implementation.
 
 ---
 

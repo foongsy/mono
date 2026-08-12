@@ -84,15 +84,16 @@ A developer or operator checks a backend health/status endpoint and learns wheth
 - **FR-001**: Users MUST be able to open a web chat interface that presents a single conversation thread.
 - **FR-002**: Users MUST be able to enter Traditional Chinese text as a chat message and submit it.
 - **FR-013**: When the user message is primarily Traditional Chinese, the agent SHOULD reply in Traditional Chinese. Occasional mixed scripts or proper nouns do not by themselves fail acceptance; a wholly unrelated-language reply for a clear Traditional Chinese prompt does fail the language preference expectation.
-- **FR-003**: The system MUST send submitted messages to a backend agent backed by a real external LLM and return the agent's reply as a stream of text updates to the web interface.
+- **FR-003**: The system MUST send submitted messages to a backend agent backed by a real external LLM and return the agent's reply as a stream of text updates to the web interface (transport).
 - **FR-011**: LLM credentials and provider access MUST be supplied via external configuration (for example environment variables) outside application source; v1 acceptance MUST NOT rely on a stub or echo agent in place of the real LLM.
-- **FR-004**: The web interface MUST display the user's message and the agent's streaming reply in the same single thread, updating the reply progressively as stream chunks arrive.
+- **FR-004**: The web interface MUST display the user's message and the agent's streaming reply in the same single thread, updating the reply progressively as stream chunks arrive (display; complements FR-003).
 - **FR-005**: The system MUST support multiple sequential turns within that one thread during a single browser page session.
 - **FR-012**: When invoking the agent for a new user message, the system MUST supply only the last N message turns from the thread as model context (a fixed small window). The concrete value of N is chosen during planning and MUST be documented; turns older than the window MAY remain visible in the UI but MUST NOT be required in the agent context.
 - **FR-006**: The backend MUST expose a health/status endpoint that reports whether the backend process is listening. This endpoint MUST NOT require a successful LLM configuration or connectivity check to report ready.
 - **FR-007**: The web interface MUST obtain the backend base address (or chat endpoint address) from an environment variable so the same frontend build can target different backend locations without code changes.
 - **FR-008**: The system MUST NOT require user login or authentication in v1.
 - **FR-009**: The system MUST NOT require a database for chat persistence in v1.
+- **FR-010**: The system MUST NOT include RAG, agent tools, file/attachment upload, or production deployment workflows in v1.
 - **FR-014**: v1 MUST NOT provide a user control to stop or cancel an in-progress streaming agent reply. The user MUST wait for stream completion or failure before the next send is allowed (see concurrent-send edge case).
 
 ### Key Entities

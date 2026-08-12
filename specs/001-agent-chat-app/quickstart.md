@@ -51,7 +51,9 @@ VITE_AGUI_URL=http://localhost:7777/agui
 1. Valid `OPENAI_API_KEY`; `make dev`
 2. Open frontend (`http://localhost:5173`)
 3. Send: `請用三句話介紹你自己。`
-4. **Expect**: Incremental assistant text via AG-UI stream; first chars ≤3s local
+4. **Expect**: Incremental assistant text via AG-UI stream
+5. **SC-001 timing**: From send click, first assistant characters appear within **3 seconds** on local network (stopwatch or browser Performance marks acceptable for manual check)
+6. **SC-002**: For a multi-sentence reply, at least two distinct UI updates before completion
 
 ## Scenario 3 — Multi-turn (SC-003)
 
@@ -72,6 +74,7 @@ VITE_AGUI_URL=http://localhost:7777/agui
 
 1. `今天天氣如何？請用繁體中文回答。`
 2. **Expect**: Predominantly Traditional Chinese reply
+3. **Manual rubric**: Pass if ≥80% of visible reply characters are Traditional Chinese (or clearly TC prose); fail if the entire reply is another natural language (e.g. English-only or Simplified-only body)
 
 ## Scenario 7 — Errors
 
