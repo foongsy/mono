@@ -40,7 +40,7 @@ HTTP 2xx when AG-UI interface is mounted and process is listening.
 |-----------|---------|
 | HTTP 2xx | `true` |
 | Connection refused / timeout / non-2xx | `false` |
-| Missing `OPENAI_API_KEY` | Still `true` if process responds 2xx |
+| Missing `AI_GATEWAY_API_KEY` | Still `true` if process responds 2xx |
 
 ---
 
@@ -93,14 +93,22 @@ Events consumed by `@assistant-ui/react-ag-ui` (v1 subset):
 ## 3. Backend setup (Agno)
 
 ```python
+import os
 from agno.agent import Agent
-from agno.models.openai import OpenAIChat
+from agno.models.openai.like import OpenAILike
 from agno.os import AgentOS
 from agno.os.interfaces.agui import AGUI
 
 chat_agent = Agent(
     id="chat-agent",
-    model=OpenAIChat(id=os.environ["OPENAI_MODEL"]),
+    model=OpenAILike(
+        id=os.getenv("LLM_MODEL_ID", "google/gemini-3.5-flash-lite"),
+        api_key=os.environ["AI_GATEWAY_API_KEY"],
+        base_url=os.getenv(
+            "AI_GATEWAY_BASE_URL",
+            "https://ai-gateway.vercel.sh/v1",
+        ),
+    ),
     instructions="...",  # Prefer Traditional Chinese (FR-013)
 )
 
@@ -132,13 +140,13 @@ const runtime = useAgUiRuntime({ agent, showThinking: false });
 
 Install: `npm install @assistant-ui/react @assistant-ui/react-ag-ui @ag-ui/client`
 
-Apply `sliceLastNTurns(messages, 10)` at run boundary (wrapper or hook) before `HttpAgent` sends input.
+**Context trim (canonical)**: Implement `TrimmingHttpAgent` in `frontend/src/runtime/trimming-http-agent.ts` that extends or wraps `@ag-ui/client` `HttpAgent` and overrides the run/send path to set `messages = sliceLastNTurns(messages, 10)` before the request is sent. `AgUiRuntimeProvider` MUST construct `useAgUiRuntime({ agent: new TrimmingHttpAgent(...) })` — do not rely on an undocumented `useAgUiRuntime` hook.
 
 ---
 
 ## 5. CORS
 
-AgentOS MUST allow frontend dev origin for `GET /status` and `POST /agui`.
+AgentOS MUST allow the Vite dev origin **`http://localhost:5173`** (and optionally `http://127.0.0.1:5173`) for `GET /status` and `POST /agui`.
 
 ---
 
@@ -146,13 +154,12 @@ AgentOS MUST allow frontend dev origin for `GET /status` and `POST /agui`.
 
 | Variable | Required | Example | Description |
 |----------|----------|---------|-------------|
-| `VITE_AGUI_URL` | yes | `http://localhost:7777/agui` | Full AG-UI run endpoint URL (FR-007) |
-| `OPENAI_API_KEY` | yes (for chat) | `sk-...` | LLM credentials (FR-011) |
-| `OPENAI_MODEL` | no | `gpt-4o-mini` | Model id |
+| `VITE_AGUI_URL` | yes | `http://localhost:7777/agui` | Full AG-UI run endpoint URL (FR-007). **Canonical — do not use a separate base-URL variable.** |
+| `AI_GATEWAY_API_KEY` | yes (for chat) | `vck_...` | Vercel AI Gateway API key (FR-011) |
+| `LLM_MODEL_ID` | no | `google/gemini-3.5-flash-lite` | Gateway model id (`provider/model`) |
+| `AI_GATEWAY_BASE_URL` | no | `https://ai-gateway.vercel.sh/v1` | OpenAI-compatible Chat Completions base URL |
 | `AGENT_OS_HOST` | no | `0.0.0.0` | Bind host |
 | `AGENT_OS_PORT` | no | `7777` | Bind port |
-
-Alternative: `VITE_AGENTOS_URL=http://localhost:7777` with frontend appending `/agui` — document one canonical approach in implementation.
 
 ---
 
@@ -162,6 +169,7 @@ Alternative: `VITE_AGENTOS_URL=http://localhost:7777` with frontend appending `/
 |---------|--------|
 | 1.0.0 | Initial draft (AgentOS REST `/runs` — superseded) |
 | 1.1.0 | AG-UI native integration (`/agui`, `/status`) |
+| 1.2.0 | LLM via Vercel AI Gateway + `OpenAILike` (`google/gemini-3.5-flash-lite`) |
 
 Breaking changes to paths, required `RunAgentInput` fields, or event types → MAJOR bump.
 

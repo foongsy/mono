@@ -8,15 +8,17 @@
 - Node.js 20+
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/) installed
-- OpenAI API key
+- Vercel AI Gateway API key (`AI_GATEWAY_API_KEY`)
 
 ## Environment
 
 `backend/.env`:
 
 ```bash
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
+AI_GATEWAY_API_KEY=vck_...
+LLM_MODEL_ID=google/gemini-3.5-flash-lite
+# optional override:
+# AI_GATEWAY_BASE_URL=https://ai-gateway.vercel.sh/v1
 AGENT_OS_HOST=0.0.0.0
 AGENT_OS_PORT=7777
 ```
@@ -44,14 +46,16 @@ VITE_AGUI_URL=http://localhost:7777/agui
 2. `make health` or `curl -sf http://localhost:7777/status`
 3. **Expect**: HTTP 200
 4. Stop backend → health fails
-5. **Pass**: Ready without valid OpenAI key
+5. **Pass**: Ready without valid AI Gateway key
 
 ## Scenario 2 — Streaming chat (SC-001, SC-002)
 
-1. Valid `OPENAI_API_KEY`; `make dev`
+1. Valid `AI_GATEWAY_API_KEY`; `make dev`
 2. Open frontend (`http://localhost:5173`)
 3. Send: `請用三句話介紹你自己。`
-4. **Expect**: Incremental assistant text via AG-UI stream; first chars ≤3s local
+4. **Expect**: Incremental assistant text via AG-UI stream
+5. **SC-001 timing**: From send click, first assistant characters appear within **3 seconds** on local network (stopwatch or browser Performance marks acceptable for manual check)
+6. **SC-002**: For a multi-sentence reply, at least two distinct UI updates before completion
 
 ## Scenario 3 — Multi-turn (SC-003)
 
@@ -72,10 +76,11 @@ VITE_AGUI_URL=http://localhost:7777/agui
 
 1. `今天天氣如何？請用繁體中文回答。`
 2. **Expect**: Predominantly Traditional Chinese reply
+3. **Manual rubric**: Pass if ≥80% of visible reply characters are Traditional Chinese (or clearly TC prose); fail if the entire reply is another natural language (e.g. English-only or Simplified-only body)
 
 ## Scenario 7 — Errors
 
-1. Invalid key or stopped backend during send
+1. Invalid gateway key or stopped backend during send
 2. **Expect**: Error on turn (`RUN_ERROR`); can send again
 
 ## Scenario 8 — No stop control (FR-014)
@@ -90,6 +95,8 @@ VITE_AGUI_URL=http://localhost:7777/agui
 - [research.md](./research.md)
 - [assistant-ui AG-UI quickstart](https://www.assistant-ui.com/docs/runtimes/ag-ui/quickstart)
 - [Agno AG-UI interface](https://docs.agno.com/agent-os/interfaces/ag-ui/introduction)
+- [Vercel AI Gateway — OpenAI Chat Completions](https://vercel.com/docs/ai-gateway/sdks-and-apis/openai-chat-completions)
+- [Agno OpenAILike](https://docs.agno.com/models/providers/openai-like)
 
 ## Next step
 

@@ -66,7 +66,7 @@ Frontend → Agno `POST /agui` per send. Constructed by `@ag-ui/client` / `useAg
 | `messages` | AgUiMessage[] | yes | **Last N=10 turns only** (FR-012) |
 | `tools` | array | no | Omitted / empty (no tools v1) |
 
-**Trim rule**: `messages = sliceLastNTurns(fullThreadMessages, 10)` immediately before run.
+**Trim rule**: `TrimmingHttpAgent` sets `messages = sliceLastNTurns(fullThreadMessages, 10)` immediately before the AG-UI run request leaves the client.
 
 ---
 

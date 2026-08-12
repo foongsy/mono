@@ -33,4 +33,5 @@
 
 - Validation iteration 1 (2026-08-12): All items pass.
 - Scope exclusions (login, DB, RAG, tools, attachments, production deploy) captured in FR-008–FR-010 and Assumptions.
-- Ready for `/speckit-clarify` (optional) or `/speckit-plan`.
+- Analysis remediation (2026-08-12): Restored FR-010; locked AG-UI trim via TrimmingHttpAgent; canonical VITE_AGUI_URL only.
+- Ready for re-analysis (`/speckit-analyze`) then `/speckit-implement`.

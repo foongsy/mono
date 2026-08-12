@@ -21,7 +21,7 @@
 - Next.js BFF translating AI SDK ↔ AgentOS — extra hop, wrong protocol.
 
 **Key implementation notes**:
-- Backend install: `uv pip install 'agno[os,agui]' openai`
+- Backend install: `uv pip install 'agno[os,agui]' openai` (`openai` package required by Agno `OpenAILike` client)
 - Backend wiring:
   ```python
   agent_os = AgentOS(
@@ -52,9 +52,9 @@
 
 **Key implementation notes**:
 - Agent instructions: prefer Traditional Chinese replies (FR-013).
-- LLM via env: `OPENAI_API_KEY`, `OPENAI_MODEL` (default `gpt-4o-mini`).
-- CORS: allow frontend dev origin on AgentOS app for browser `HttpAgent` calls.
-- Structured logging on `/agui` runs (Principle VI) with `thread_id`, `run_id`, request correlation.
+- LLM via Vercel AI Gateway env: `AI_GATEWAY_API_KEY`, `LLM_MODEL_ID` (default `google/gemini-3.5-flash-lite`), optional `AI_GATEWAY_BASE_URL` (default `https://ai-gateway.vercel.sh/v1`).
+- CORS: allow `http://localhost:5173` (and `http://127.0.0.1:5173`) on AgentOS for browser `HttpAgent` calls.
+- Structured logging on `/agui` runs (Principle VI) with `request_id` (may equal `run_id`), `thread_id`, and `run_id`.
 
 ## 3. Frontend UI — assistant-ui + react-ag-ui
 
@@ -70,20 +70,22 @@
 - `@assistant-ui/react-ai-sdk` — wrong protocol (Vercel AI SDK, not AG-UI).
 
 **Key implementation notes**:
-- Env: `VITE_AGUI_URL` (full URL to `POST /agui`, e.g. `http://localhost:7777/agui`) or `VITE_AGENTOS_URL` + documented `/agui` suffix (FR-007).
+- Env: **`VITE_AGUI_URL` only** (full URL to `POST /agui`, e.g. `http://localhost:7777/agui`) — FR-007. Do not introduce `VITE_AGENTOS_URL`.
 - Do not expose cancel/stop UI controls (clarification: no stop in v1); rely on runtime `isRunning` to disable send.
 - Optional: `showThinking: false` for simpler v1 UI (no tools/RAG).
+- Thread: use assistant-ui `Thread` without composer cancel/stop actions (omit stop button from starter chrome).
 
 ## 4. Context window N = 10 turns
 
-**Decision**: Client-side trim of AG-UI messages to last **10 turns** before each run via a thin `HttpAgent` wrapper or `runConfig` hook; full transcript remains in assistant-ui thread UI.
+**Decision**: Client-side trim via **`TrimmingHttpAgent`** (`frontend/src/runtime/trimming-http-agent.ts`) wrapping `@ag-ui/client` `HttpAgent`. Before each run request, set `messages = sliceLastNTurns(messages, 10)`. Full transcript remains in assistant-ui thread UI.
 
 **Rationale**:
 - Spec FR-012 + clarification: last N turns, N fixed at planning.
 - Without server DB, context MUST travel in `RunAgentInput.messages` each request — AG-UI's default behavior.
-- `useAgUiRuntime` forwards thread messages automatically; trim in one pure function (`sliceLastNTurns(messages, 10)`) at the agent client boundary.
+- Extending/wrapping `HttpAgent` is the stable interception point; do not depend on undocumented `useAgUiRuntime` internals.
 
 **Alternatives considered**:
+- Undocumented runtime hook / `runConfig` — rejected; API not stable for v1.
 - Agno `num_history_messages=10` with DB — requires DB (FR-009 violation).
 - Server-side trim in custom FastAPI middleware — unnecessary; client owns transcript in v1.
 
@@ -98,9 +100,16 @@
 
 ## 6. LLM provider
 
-**Decision**: OpenAI via Agno `OpenAIChat` or `OpenAIResponses`; model from `OPENAI_MODEL` env.
+**Decision**: **Vercel AI Gateway** (OpenAI-compatible Chat Completions) via Agno `OpenAILike`:
+- `base_url` = `AI_GATEWAY_BASE_URL` or default `https://ai-gateway.vercel.sh/v1`
+- `api_key` = `AI_GATEWAY_API_KEY`
+- `id` = `LLM_MODEL_ID` default **`google/gemini-3.5-flash-lite`**
 
-**Rationale**: Clarification requires real external LLM; credentials via env only (FR-011).
+**Rationale**:
+- Clarification requires a real external LLM; FR-011 requires credentials via env only.
+- Gateway gives a stable OpenAI-compatible surface without coupling the agent to a single vendor SDK; model id is gateway-routed (`provider/model`).
+- Agno has no first-class Vercel Gateway class yet; `OpenAILike` is the supported pattern for OpenAI-compatible endpoints.
+- Alternatives rejected: direct `OpenAIChat`/`OPENAI_API_KEY` (wrong provider for this project); stub/echo agent (violates clarification).
 
 ## 7. Testing strategy
 
