@@ -1,122 +1,114 @@
 # Data Model: Agent Chat App (001)
 
-**Date**: 2026-08-12  
-**Persistence**: None for v1 (in-memory browser session only; no database)
+**Date**: 2026-08-12 (revised for AG-UI)  
+**Persistence**: None for v1 (browser session only; no database)  
+**Wire protocol**: AG-UI (`RunAgentInput` / event stream)
 
 ## Overview
 
-All entities exist in the browser for the active page session except ephemeral backend run metadata. AgentOS is configured **without** a database in v1 to satisfy FR-009.
+Conversation state lives in assistant-ui runtime (browser memory). Backend is stateless for v1: each `POST /agui` receives trimmed messages in `RunAgentInput`. AgentOS runs without `db` (FR-009).
 
-**Context window constant**: `N = 10` message turns (see `research.md`).
+**Context window constant**: `N = 10` message turns.
 
 ---
 
 ## ChatThread
 
-The single conversation container for one page session.
+Single conversation container for one page session (assistant-ui thread).
 
 | Field | Type | Required | Rules |
 |-------|------|----------|-------|
-| `id` | string (UUID) | yes | Generated once per page load; sent as AgentOS `session_id` for correlation only (not persisted server-side in v1) |
-| `turns` | MessageTurn[] | yes | Ordered oldest → newest; full session transcript visible in UI |
-| `status` | enum | yes | `idle` \| `streaming` \| `error` |
+| `id` | string (UUID) | yes | Maps to AG-UI `threadId`; generated per page load |
+| `messages` | AgUiMessage[] | yes | Full session transcript for UI display |
+| `isRunning` | boolean | yes | Managed by `useAgUiRuntime`; `true` during AG-UI run |
 
-**State transitions**:
+**State transitions** (driven by AG-UI events):
 
 ```text
-idle → streaming   (user sends valid message)
-streaming → idle   (stream completes successfully)
-streaming → error  (stream fails mid-reply)
-error → idle       (user sends next message after error displayed)
-idle → idle        (empty send rejected; no transition)
+isRunning false → true   (RUN_STARTED)
+isRunning true → false   (RUN_FINISHED | RUN_ERROR | RUN_CANCELLED*)
 ```
 
+*No user-triggered cancel in v1 (FR-014); `RUN_CANCELLED` not expected from UI.
+
 **Invariants**:
-- Exactly one thread per page session (FR-001, FR-005).
-- `status = streaming` ⇒ send disabled (FR-014, edge case concurrent send).
+- One thread per page session (FR-001, FR-005).
+- `isRunning = true` ⇒ send disabled (FR-014).
 - Refresh may discard thread (spec assumption).
 
 ---
 
-## MessageTurn
+## Message (AG-UI / assistant-ui)
 
-One user or assistant contribution in the thread.
+Canonical message shape follows AG-UI protocol; assistant-ui `ThreadMessage` is the UI projection.
 
 | Field | Type | Required | Rules |
 |-------|------|----------|-------|
-| `id` | string (UUID) | yes | Stable for UI keys |
-| `role` | enum | yes | `user` \| `assistant` |
-| `content` | string | yes | UTF-8 text; Traditional Chinese expected for user input |
-| `status` | enum | yes | `complete` \| `streaming` \| `error` |
-| `createdAt` | ISO-8601 string | yes | Client clock |
-| `errorMessage` | string | no | Set when `status = error` |
+| `id` | string | yes | Stable message id |
+| `role` | enum | yes | `user` \| `assistant` \| `system` (system optional v1) |
+| `content` | string or parts[] | yes | UTF-8; user input in Traditional Chinese |
+| `status` | enum | yes (UI) | `complete` \| `streaming` \| `error` (assistant-ui derived) |
 
 **Validation**:
-- User turns: reject if `content` is empty or whitespace-only (FR-002, SC-006).
-- Assistant turns: `content` may grow incrementally while `status = streaming` (FR-004).
-- On stream failure: set `status = error`, keep partial `content` if any (edge case).
+- Empty/whitespace user content: rejected before `/agui` call (FR-002, SC-006).
+- Assistant message streams via `TEXT_MESSAGE_*` events (FR-004).
 
 ---
 
-## StreamChunk
+## RunAgentInput (boundary payload)
 
-Ephemeral unit from AgentOS SSE while an assistant turn is open.
+Frontend → Agno `POST /agui` per send. Constructed by `@ag-ui/client` / `useAgUiRuntime`; trimmed by our adapter.
 
 | Field | Type | Required | Rules |
 |-------|------|----------|-------|
-| `turnId` | string | yes | Target assistant MessageTurn.id |
-| `delta` | string | yes | Text fragment to append |
-| `eventType` | string | yes | AgentOS event kind (e.g. content, completed, error) |
-| `sequence` | integer | yes | Monotonic per turn for ordering |
+| `threadId` | string | yes | ChatThread.id |
+| `runId` | string | yes | Unique per send |
+| `messages` | AgUiMessage[] | yes | **Last N=10 turns only** (FR-012) |
+| `tools` | array | no | Omitted / empty (no tools v1) |
 
-**Lifecycle**: Discarded after applied to MessageTurn; not stored long-term.
+**Trim rule**: `messages = sliceLastNTurns(fullThreadMessages, 10)` immediately before run.
 
 ---
 
-## AgentRunRequest (boundary payload)
+## AgUiEvent (stream)
 
-Frontend → AgentOS for each user send (derived, not stored).
+Ephemeral events on `POST /agui` response stream. Parsed by `@assistant-ui/react-ag-ui` — not stored independently.
 
-| Field | Type | Required | Rules |
-|-------|------|----------|-------|
-| `agent_id` | string | yes | Constant `chat-agent` |
-| `message` | string | yes | Latest user message text |
-| `session_id` | string | yes | ChatThread.id |
-| `stream` | boolean | yes | Always `true` for chat UI |
-| `context_turns` | MessageTurn[] | yes | Last N=10 turns from thread **before** adding new user turn, or including new user turn per adapter design — must not exceed N |
-
-**Note**: Because v1 has no server DB, multi-turn context is supplied by the frontend adapter (last-N slice), not AgentOS session history.
+| Event types (v1) | Maps to |
+|------------------|---------|
+| `TEXT_MESSAGE_CONTENT`, `TEXT_MESSAGE_CHUNK` | Incremental assistant text |
+| `RUN_STARTED` / `RUN_FINISHED` | Thread running state |
+| `RUN_ERROR` | Turn error |
 
 ---
 
 ## ServiceStatus
 
-Result of health/status check (User Story 3).
+Health check result (User Story 3).
 
 | Field | Type | Required | Rules |
 |-------|------|----------|-------|
-| `ready` | boolean | yes | `true` iff HTTP GET `/info` returns 2xx |
-| `checkedAt` | ISO-8601 string | yes | Client or script timestamp |
-| `baseUrl` | string | yes | From env-configured AgentOS URL |
+| `ready` | boolean | yes | `true` iff `GET /status` returns 2xx |
+| `checkedAt` | ISO-8601 | yes | Timestamp |
+| `aguiUrl` | string | yes | From `VITE_AGUI_URL` |
 
-**Invariant**: Missing/invalid LLM credentials do not affect `ready` (clarification: process listening only).
+**Invariant**: Invalid LLM credentials do not affect `ready` (process listening only).
 
 ---
 
 ## Relationships
 
 ```text
-ChatThread 1 ── * MessageTurn
-MessageTurn (assistant, streaming) 1 ── * StreamChunk (ephemeral)
-AgentRunRequest ──references──> last N MessageTurns + latest user message
-ServiceStatus ──probes──> AgentOS /info
+ChatThread 1 ── * Message (UI + RunAgentInput.messages subset)
+RunAgentInput ──trim(N=10)──> subset of ChatThread.messages
+POST /agui ──stream──> AgUiEvent* ──parsed by──> useAgUiRuntime
+ServiceStatus ──probes──> GET /status
 ```
 
 ---
 
 ## Out of scope (v1)
 
-- User accounts, auth tokens, tenant ids
-- Durable storage, migrations, thread list
-- Attachments, tool call entities, RAG document entities
-- Server-side conversation archive
+- Server-side session DB, Agno `add_history_to_context` with storage
+- Tool call entities, attachments, RAG documents
+- Multi-thread list, auth, production deployment

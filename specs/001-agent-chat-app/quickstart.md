@@ -1,18 +1,18 @@
 # Quickstart: Agent Chat App (001)
 
 **Feature**: `specs/001-agent-chat-app`  
-**Goal**: Validate end-to-end chat streaming, health check, and env-based backend URL without production deployment.
+**Protocol**: AG-UI (assistant-ui ↔ Agno `AGUI` interface)
 
 ## Prerequisites
 
 - Node.js 20+
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/) installed
-- OpenAI API key with access to the configured model
+- OpenAI API key
 
 ## Environment
 
-Create `backend/.env` (not committed):
+`backend/.env`:
 
 ```bash
 OPENAI_API_KEY=sk-...
@@ -21,91 +21,76 @@ AGENT_OS_HOST=0.0.0.0
 AGENT_OS_PORT=7777
 ```
 
-Create `frontend/.env.local` (not committed):
+`frontend/.env.local`:
 
 ```bash
-VITE_AGENTOS_URL=http://localhost:7777
+VITE_AGUI_URL=http://localhost:7777/agui
 ```
 
-## Commands (Constitution X)
-
-From repository root after implementation lands:
+## Commands
 
 | Command | Purpose |
 |---------|---------|
-| `make dev-backend` | Start Agno AgentOS |
+| `make dev-backend` | Start AgentOS with AGUI interface |
 | `make dev-frontend` | Start assistant-ui dev server |
 | `make dev` | Start both |
-| `make health` | Curl `GET /info` |
-| `make test` | Run backend + frontend tests |
-| `make lint` | Run linters |
+| `make health` | `curl GET /status` |
+| `make test` | Backend + frontend tests |
+| `make lint` | Linters |
 
-CI MUST invoke the same `make test` and `make lint` targets.
+## Scenario 1 — Health / status (SC-004)
 
-## Scenario 1 — Health / status (User Story 3, SC-004)
+1. `make dev-backend`
+2. `make health` or `curl -sf http://localhost:7777/status`
+3. **Expect**: HTTP 200
+4. Stop backend → health fails
+5. **Pass**: Ready without valid OpenAI key
 
-1. Run `make dev-backend`
-2. Run `make health` (or `curl -s http://localhost:7777/info`)
-3. **Expect**: HTTP 200 JSON with `agent_count >= 1`
-4. Stop backend; rerun health
-5. **Expect**: connection failure (not ready)
+## Scenario 2 — Streaming chat (SC-001, SC-002)
 
-**Pass**: Ready when listening; not ready when stopped — even if `OPENAI_API_KEY` is unset.
+1. Valid `OPENAI_API_KEY`; `make dev`
+2. Open frontend (`http://localhost:5173`)
+3. Send: `請用三句話介紹你自己。`
+4. **Expect**: Incremental assistant text via AG-UI stream; first chars ≤3s local
 
-## Scenario 2 — Send message + streaming reply (User Story 1, SC-001, SC-002)
+## Scenario 3 — Multi-turn (SC-003)
 
-1. Set valid `OPENAI_API_KEY`
-2. Run `make dev`
-3. Open frontend URL (typically `http://localhost:5173`)
-4. Enter Traditional Chinese: `請用三句話介紹你自己。`
-5. Send
-6. **Expect**:
-   - User turn appears immediately
-   - Assistant reply grows incrementally (multiple visible updates for a multi-sentence answer)
-   - First characters within ~3s on local network (SC-001)
-   - No page reload
+1. Follow-up: `你剛才第一句話是什麼？`
+2. **Expect**: Both exchanges in one thread; context within last 10 turns; send disabled while streaming
 
-## Scenario 3 — Multi-turn same thread (User Story 2, SC-003)
+## Scenario 4 — Empty message (SC-006)
 
-1. After Scenario 2 completes, send: `你剛才第一句話是什麼？`
-2. **Expect**:
-   - Both exchanges visible in one thread
-   - Reply references recent context (within last N=10 turns)
-   - Send disabled while streaming (FR-014)
+1. Whitespace-only send
+2. **Expect**: No `/agui` request; no new turns
 
-## Scenario 4 — Empty message rejected (SC-006)
+## Scenario 5 — Env URL (SC-005)
 
-1. Submit whitespace-only input
-2. **Expect**: No new user or assistant turn; no network call to `/runs`
+1. Change `VITE_AGUI_URL`; restart frontend
+2. **Expect**: Chat targets new backend without code edits
 
-## Scenario 5 — Backend URL via env (SC-005)
+## Scenario 6 — Traditional Chinese (SC-007)
 
-1. Change `VITE_AGENTOS_URL` to a different reachable AgentOS instance (or port)
-2. Restart frontend dev server
-3. **Expect**: Chat and health target new base URL without source edits
+1. `今天天氣如何？請用繁體中文回答。`
+2. **Expect**: Predominantly Traditional Chinese reply
 
-## Scenario 6 — Traditional Chinese replies (SC-007)
+## Scenario 7 — Errors
 
-1. Send clear Traditional Chinese prompt: `今天天氣如何？請用繁體中文回答。`
-2. **Expect**: Reply predominantly Traditional Chinese (not wholly another language)
-
-## Scenario 7 — Stream failure handling
-
-1. Stop backend mid-reply OR unset invalid API key and send
-2. **Expect**: Error shown on assistant turn; user can send again after idle
-3. **Expect**: No stop/cancel control in UI (clarification)
+1. Invalid key or stopped backend during send
+2. **Expect**: Error on turn (`RUN_ERROR`); can send again
 
 ## Scenario 8 — No stop control (FR-014)
 
-1. During streaming, verify UI has no cancel/stop button
-2. Send button disabled until stream completes or fails
+1. No cancel/stop button during stream
+2. Send disabled until run completes
 
 ## References
 
-- API contract: [contracts/api-v1.md](./contracts/api-v1.md)
-- Data model: [data-model.md](./data-model.md)
-- Research decisions: [research.md](./research.md)
+- [contracts/ag-ui-v1.md](./contracts/ag-ui-v1.md)
+- [data-model.md](./data-model.md)
+- [research.md](./research.md)
+- [assistant-ui AG-UI quickstart](https://www.assistant-ui.com/docs/runtimes/ag-ui/quickstart)
+- [Agno AG-UI interface](https://docs.agno.com/agent-os/interfaces/ag-ui/introduction)
 
 ## Next step
 
-Run `/speckit-tasks` to generate implementation tasks from this plan.
+`/speckit-tasks`
