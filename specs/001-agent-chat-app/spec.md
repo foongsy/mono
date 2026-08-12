@@ -8,6 +8,12 @@
 
 **Input**: User description: "建立一個簡單的 agent chat app。使用者可在 web 介面輸入繁體中文訊息，並收到由 backend agent 串流回傳的回覆。v1 只需要單一聊天 thread；不包含登入、資料庫、RAG、tools、上傳附件或 production deployment。Acceptance criteria：1. web 介面可送出訊息並顯示串流回覆。2. backend 有可檢查的 health/status endpoint。3. 前端 endpoint 可透過 environment variable 設定。"
 
+## Clarifications
+
+### Session 2026-08-12
+
+- Q: For v1 acceptance, what should produce the agent’s streamed reply? → A: Real external LLM required for v1 acceptance (credentials configured outside the app)
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Send a message and see a streaming reply (Priority: P1)
@@ -62,6 +68,7 @@ A developer or operator checks a backend health/status endpoint and learns wheth
 - What happens when the agent stream fails or disconnects mid-reply? The UI MUST show a clear error on that turn and MUST allow the user to send a new message afterward.
 - What happens when the user tries to send another message while a reply is still streaming? The system MUST prevent concurrent sends for the single thread (disable send or queue rejection) until the in-flight reply completes or fails.
 - What happens when the configured frontend backend address is wrong or unreachable? The UI MUST show a clear connection/error state when send is attempted (and health checks fail as in User Story 3).
+- What happens when the external LLM is unreachable, rejects credentials, or returns an error? The UI MUST show a clear error on that turn; the backend MUST NOT pretend the reply succeeded.
 - What happens on page refresh? Conversation history for v1 is session-only and MAY be lost; no durable restore is required.
 
 ## Requirements *(mandatory)*
@@ -70,7 +77,8 @@ A developer or operator checks a backend health/status endpoint and learns wheth
 
 - **FR-001**: Users MUST be able to open a web chat interface that presents a single conversation thread.
 - **FR-002**: Users MUST be able to enter Traditional Chinese text as a chat message and submit it.
-- **FR-003**: The system MUST send submitted messages to a backend agent and return the agent's reply as a stream of text updates to the web interface.
+- **FR-003**: The system MUST send submitted messages to a backend agent backed by a real external LLM and return the agent's reply as a stream of text updates to the web interface.
+- **FR-011**: LLM credentials and provider access MUST be supplied via external configuration (for example environment variables) outside application source; v1 acceptance MUST NOT rely on a stub or echo agent in place of the real LLM.
 - **FR-004**: The web interface MUST display the user's message and the agent's streaming reply in the same single thread, updating the reply progressively as stream chunks arrive.
 - **FR-005**: The system MUST support multiple sequential turns within that one thread during a single browser page session.
 - **FR-006**: The backend MUST expose a health/status endpoint that reports whether the service is ready to accept chat traffic.
@@ -101,7 +109,8 @@ A developer or operator checks a backend health/status endpoint and learns wheth
 
 - Target users are developers or demo viewers using a desktop browser on a local or trusted network.
 - "串流回覆" means progressive delivery of reply text to the UI as it is produced, not a single all-at-once response after full generation (though very short replies may complete in one update).
-- The backend agent can accept Traditional Chinese input and produce a textual reply suitable for display; exact model/provider choice is deferred to planning.
+- The backend agent uses a real external LLM that can accept Traditional Chinese input and produce a textual reply suitable for display; exact model/provider choice is deferred to planning, but a stub/echo agent is not acceptable for v1 acceptance.
+- LLM API credentials are provided by the operator/developer outside the app codebase; missing or invalid credentials make the backend not ready for chat (see health/status expectations).
 - v1 uses one anonymous single-thread session scoped to the browser page; refresh may clear history.
 - No multi-user isolation, sharing, export, or thread list is required.
 - Health/status is for human and scripted checks during development; public SLA/monitoring dashboards are out of scope (constitution observability applies when implementing, but production ops are excluded from this feature).
