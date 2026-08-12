@@ -120,7 +120,7 @@ A developer or operator checks a backend health/status endpoint and learns wheth
 
 - Target users are developers or demo viewers using a desktop browser on a local or trusted network.
 - "串流回覆" means progressive delivery of reply text to the UI as it is produced, not a single all-at-once response after full generation (though very short replies may complete in one update).
-- The backend agent uses a real external LLM that can accept Traditional Chinese input and SHOULD produce Traditional Chinese replies for Traditional Chinese prompts; exact model/provider choice is deferred to planning, but a stub/echo agent is not acceptable for v1 acceptance.
+- The backend agent uses a real external LLM that can accept Traditional Chinese input and SHOULD produce Traditional Chinese replies for Traditional Chinese prompts; planning selects **Vercel AI Gateway** with model id **`google/gemini-3.5-flash-lite`** (Agno `OpenAILike`); a stub/echo agent is not acceptable for v1 acceptance.
 - LLM API credentials are provided by the operator/developer outside the app codebase; missing or invalid credentials cause chat send/stream failures with a clear UI error, but do not by themselves make the health/status endpoint report unready.
 - v1 uses one anonymous single-thread session scoped to the browser page; refresh may clear history.
 - Agent context for each request is the last N turns only; full-history context is out of scope for v1. Exact N is deferred to planning but MUST be a small fixed integer.

@@ -15,8 +15,9 @@ Build a minimal Traditional Chinese agent chat web app over the **AG-UI protocol
 **Language/Version**: Python 3.11+ (backend), TypeScript 5.x (frontend)
 
 **Primary Dependencies**:
-- Backend: `agno[os,agui]`, `openai` (via Agno model)
+- Backend: `agno[os,agui]`, `openai` (OpenAI-compatible client for Vercel AI Gateway via Agno `OpenAILike`)
 - Frontend: `@assistant-ui/react`, `@assistant-ui/react-ag-ui`, `@ag-ui/client`, React 19, Vite 6
+- LLM: Vercel AI Gateway → `google/gemini-3.5-flash-lite`
 
 **Storage**: N/A — session-only in browser (FR-009); AgentOS/agent without `db`; AG-UI messages carry context per run
 
@@ -45,7 +46,7 @@ Build a minimal Traditional Chinese agent chat web app over the **AG-UI protocol
 |-----------|-------------|-------------------------------|-------|
 | I. Do not distribute by default | PASS | PASS | Browser + one AgentOS process; AG-UI removes need for BFF/proxy |
 | II. Optimize for deletion | PASS | PASS | `agent_os.py` + `AgUiRuntimeProvider.tsx` + trim helper — no custom protocol code |
-| III. Explicit dependencies | PASS | PASS | Env: `OPENAI_*`, `VITE_AGUI_URL`, `AGENT_OS_*` |
+| III. Explicit dependencies | PASS | PASS | Env: `AI_GATEWAY_*`, `LLM_MODEL_ID`, `VITE_AGUI_URL`, `AGENT_OS_*` |
 | IV. Contract at boundary | PASS | PASS | `contracts/ag-ui-v1.md` documents AG-UI + Agno mount points |
 | V. Test transformation | PASS | PASS | Unit: trim; integration: `/status`; defer AG-UI parse tests to library |
 | VI. Structured events | PASS | PASS | Backend JSON logs on AG-UI runs |
@@ -133,13 +134,13 @@ See [research.md](./research.md):
 
 ## Implementation Notes (for `/speckit-tasks`)
 
-1. **Backend**: `AgentOS(agents=[chat_agent], interfaces=[AGUI(agent=chat_agent)])`; TC instructions; no `db`.
+1. **Backend**: `AgentOS(agents=[chat_agent], interfaces=[AGUI(agent=chat_agent)])`; TC instructions; no `db`; LLM via `OpenAILike` → Vercel AI Gateway (`google/gemini-3.5-flash-lite`).
 2. **Frontend**: `TrimmingHttpAgent` (wraps `HttpAgent`, N=10) + `useAgUiRuntime({ agent })` + `Thread` (no stop control).
 3. **Context trim**: `sliceLastNTurns` in `trim-context.ts`; applied only inside `TrimmingHttpAgent` before send.
 4. **Health**: `make health` → `curl -sf $AGENTOS_BASE/status` (wired once in foundational Makefile task).
 5. **CORS**: Allow `http://localhost:5173` and `http://127.0.0.1:5173` on AgentOS app.
 6. **No cancel UI**: Do not wire stop/cancel actions (FR-014).
-7. **Env**: **`VITE_AGUI_URL=http://localhost:7777/agui` only** (no `VITE_AGENTOS_URL`), plus `OPENAI_API_KEY`, `OPENAI_MODEL`.
+7. **Env**: **`VITE_AGUI_URL=http://localhost:7777/agui` only** (no `VITE_AGENTOS_URL`), plus `AI_GATEWAY_API_KEY`, `LLM_MODEL_ID=google/gemini-3.5-flash-lite`, optional `AI_GATEWAY_BASE_URL`.
 
 ## Next Command
 

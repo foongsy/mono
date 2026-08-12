@@ -27,10 +27,10 @@
 **Purpose**: Project scaffolding and dependency baselines for Agno AgentOS + assistant-ui AG-UI stack
 
 - [ ] T001 Create directory tree `backend/`, `backend/tests/integration/`, `frontend/src/components/assistant-ui/`, `frontend/src/runtime/`, `frontend/src/lib/`, `frontend/tests/` per plan.md
-- [ ] T002 Initialize Python project with `agno[os,agui]` and `openai` in `backend/pyproject.toml`
+- [ ] T002 Initialize Python project with `agno[os,agui]` and `openai` in `backend/pyproject.toml` (`openai` required by Agno `OpenAILike` for Vercel AI Gateway)
 - [ ] T003 [P] Initialize Vite + React + TypeScript app with `@assistant-ui/react`, `@assistant-ui/react-ag-ui`, and `@ag-ui/client` in `frontend/package.json`
 - [ ] T004 [P] Add root `Makefile` with targets `dev-backend`, `dev-frontend`, `dev`, `test`, `lint`, `health` (`health` = `curl -sf` to `http://$${AGENT_OS_HOST:localhost}:$${AGENT_OS_PORT:7777}/status`)
-- [ ] T005 [P] Add `backend/.env.example` with `OPENAI_API_KEY`, `OPENAI_MODEL`, `AGENT_OS_HOST`, `AGENT_OS_PORT` and `frontend/.env.example` with **`VITE_AGUI_URL` only** (example `http://localhost:7777/agui`)
+- [ ] T005 [P] Add `backend/.env.example` with `AI_GATEWAY_API_KEY`, `LLM_MODEL_ID=google/gemini-3.5-flash-lite`, optional `AI_GATEWAY_BASE_URL=https://ai-gateway.vercel.sh/v1`, `AGENT_OS_HOST`, `AGENT_OS_PORT` and `frontend/.env.example` with **`VITE_AGUI_URL` only** (example `http://localhost:7777/agui`)
 - [ ] T006 [P] Add `.gitignore` entries for `backend/.env`, `frontend/.env.local`, `node_modules/`, `__pycache__/`, `.venv/`
 
 ---
@@ -41,7 +41,7 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T007 Implement env settings loader in `backend/config.py` (read `OPENAI_API_KEY`, `OPENAI_MODEL`, `AGENT_OS_HOST`, `AGENT_OS_PORT`; no import-time side effects)
+- [ ] T007 Implement env settings loader in `backend/config.py` (read `AI_GATEWAY_API_KEY`, `LLM_MODEL_ID` default `google/gemini-3.5-flash-lite`, `AI_GATEWAY_BASE_URL` default `https://ai-gateway.vercel.sh/v1`, `AGENT_OS_HOST`, `AGENT_OS_PORT`; no import-time side effects)
 - [ ] T008 Create AgentOS app with chat agent and `AGUI` interface (no `db`) in `backend/agent_os.py`
 - [ ] T009 Enable CORS allowlist for `http://localhost:5173` and `http://127.0.0.1:5173` on the AgentOS FastAPI app in `backend/agent_os.py`
 - [ ] T010 Add structured JSON logging on AG-UI runs with `request_id` (may equal `run_id`), `thread_id`, and `run_id` in `backend/agent_os.py`
@@ -61,7 +61,7 @@
 
 ### Implementation for User Story 1
 
-- [ ] T014 [US1] Configure chat agent Traditional Chinese reply instructions and OpenAI model from env in `backend/agent_os.py`
+- [ ] T014 [US1] Configure chat agent Traditional Chinese reply instructions and Vercel AI Gateway model via Agno `OpenAILike` (`id`/`api_key`/`base_url` from env) in `backend/agent_os.py`
 - [ ] T015 [P] [US1] Create assistant-ui `Thread` in `frontend/src/components/assistant-ui/thread.tsx` using starter primitives **without** Stop/Cancel composer actions (omit stop button from default chrome)
 - [ ] T016 [US1] Implement `useAgUiRuntime` provider with `showThinking: false` in `frontend/src/runtime/AgUiRuntimeProvider.tsx` (agent instance supplied later by T023; for US1 may use plain `HttpAgent` temporarily if needed, then swap)
 - [ ] T017 [US1] Mount `AgUiRuntimeProvider` and `Thread` in `frontend/src/App.tsx` using `VITE_AGUI_URL` from `frontend/src/lib/env.ts`
@@ -94,13 +94,13 @@
 
 **Goal**: Operators can check process-listening health via AG-UI `GET /status` without LLM credential checks
 
-**Independent Test**: `make health` succeeds with backend up (even without `OPENAI_API_KEY`); fails when backend stopped (quickstart Scenario 1)
+**Independent Test**: `make health` succeeds with backend up (even without `AI_GATEWAY_API_KEY`); fails when backend stopped (quickstart Scenario 1)
 
 ### Implementation for User Story 3
 
 - [ ] T025 [US3] Assert in code comments + contract alignment that Agno `AGUI` exposes `GET /status` without LLM checks in `backend/agent_os.py` (reference `specs/001-agent-chat-app/contracts/ag-ui-v1.md`)
 - [ ] T026 [P] [US3] Add integration test that `GET /status` returns 2xx when app is listening in `backend/tests/integration/test_status.py`
-- [ ] T027 [US3] Add integration test case that `GET /status` still returns 2xx when `OPENAI_API_KEY` is unset/invalid while the process listens in `backend/tests/integration/test_status.py`
+- [ ] T027 [US3] Add integration test case that `GET /status` still returns 2xx when `AI_GATEWAY_API_KEY` is unset/invalid while the process listens in `backend/tests/integration/test_status.py`
 - [ ] T028 [US3] Document operator usage of existing `make health` (from T004) in root `README.md` health section (no duplicate Makefile target)
 
 **Checkpoint**: All three user stories independently verifiable
@@ -111,7 +111,7 @@
 
 **Purpose**: Docs, command surface, and quickstart validation across stories
 
-- [ ] T029 [P] Update root `README.md` with setup, **`VITE_AGUI_URL` only**, Makefile command index, and CORS origins
+- [ ] T029 [P] Update root `README.md` with setup (Vercel AI Gateway env: `AI_GATEWAY_API_KEY`, `LLM_MODEL_ID`, optional `AI_GATEWAY_BASE_URL`), **`VITE_AGUI_URL` only**, Makefile command index, and CORS origins
 - [ ] T030 [P] Align `make test` / `make lint` with backend pytest and frontend vitest/eslint in `Makefile`
 - [ ] T031 Run `specs/001-agent-chat-app/quickstart.md` scenarios 1–8 including SC-001 stopwatch check and SC-007 language rubric; record gaps as follow-ups
 - [ ] T032 Confirm no login/DB/RAG/tools/attachments/prod-deploy artifacts were introduced (covers FR-008, FR-009, FR-010)

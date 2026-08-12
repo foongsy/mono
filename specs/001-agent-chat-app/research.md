@@ -21,7 +21,7 @@
 - Next.js BFF translating AI SDK ↔ AgentOS — extra hop, wrong protocol.
 
 **Key implementation notes**:
-- Backend install: `uv pip install 'agno[os,agui]' openai`
+- Backend install: `uv pip install 'agno[os,agui]' openai` (`openai` package required by Agno `OpenAILike` client)
 - Backend wiring:
   ```python
   agent_os = AgentOS(
@@ -52,7 +52,7 @@
 
 **Key implementation notes**:
 - Agent instructions: prefer Traditional Chinese replies (FR-013).
-- LLM via env: `OPENAI_API_KEY`, `OPENAI_MODEL` (default `gpt-4o-mini`).
+- LLM via Vercel AI Gateway env: `AI_GATEWAY_API_KEY`, `LLM_MODEL_ID` (default `google/gemini-3.5-flash-lite`), optional `AI_GATEWAY_BASE_URL` (default `https://ai-gateway.vercel.sh/v1`).
 - CORS: allow `http://localhost:5173` (and `http://127.0.0.1:5173`) on AgentOS for browser `HttpAgent` calls.
 - Structured logging on `/agui` runs (Principle VI) with `request_id` (may equal `run_id`), `thread_id`, and `run_id`.
 
@@ -100,9 +100,16 @@
 
 ## 6. LLM provider
 
-**Decision**: OpenAI via Agno `OpenAIChat` or `OpenAIResponses`; model from `OPENAI_MODEL` env.
+**Decision**: **Vercel AI Gateway** (OpenAI-compatible Chat Completions) via Agno `OpenAILike`:
+- `base_url` = `AI_GATEWAY_BASE_URL` or default `https://ai-gateway.vercel.sh/v1`
+- `api_key` = `AI_GATEWAY_API_KEY`
+- `id` = `LLM_MODEL_ID` default **`google/gemini-3.5-flash-lite`**
 
-**Rationale**: Clarification requires real external LLM; credentials via env only (FR-011).
+**Rationale**:
+- Clarification requires a real external LLM; FR-011 requires credentials via env only.
+- Gateway gives a stable OpenAI-compatible surface without coupling the agent to a single vendor SDK; model id is gateway-routed (`provider/model`).
+- Agno has no first-class Vercel Gateway class yet; `OpenAILike` is the supported pattern for OpenAI-compatible endpoints.
+- Alternatives rejected: direct `OpenAIChat`/`OPENAI_API_KEY` (wrong provider for this project); stub/echo agent (violates clarification).
 
 ## 7. Testing strategy
 
