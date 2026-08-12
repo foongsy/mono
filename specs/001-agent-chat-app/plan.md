@@ -3,57 +3,57 @@
 **Branch**: `001-agent-chat-app` | **Date**: 2026-08-12 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `/specs/001-agent-chat-app/spec.md`  
-**User stack directive**: assistant-ui frontend, Agno SDK backend with AgentOS enabled
+**User stack directive**: assistant-ui frontend, Agno SDK backend with AgentOS enabled  
+**Revision**: Native **AG-UI** protocol — `@assistant-ui/react-ag-ui` ↔ Agno `AGUI` interface
 
 ## Summary
 
-Build a minimal Traditional Chinese agent chat web app: one browser thread, streaming replies from a real external LLM via Agno AgentOS, process-listening health check, and frontend backend URL configured by environment variable. Frontend uses **assistant-ui** (`useExternalStoreRuntime` + `Thread`). Backend runs a single **Agno AgentOS** instance exposing `GET /info` and `POST /agents/chat-agent/runs` (SSE). No login, database, RAG, tools, attachments, or production deployment in v1. Context window **N = 10** turns supplied by the frontend adapter.
+Build a minimal Traditional Chinese agent chat web app over the **AG-UI protocol**: assistant-ui (`useAgUiRuntime` + `HttpAgent`) on the frontend, Agno AgentOS with the **`AGUI` interface** on the backend (`POST /agui` streaming, `GET /status` health). One browser thread, real external LLM, env-configured AG-UI URL, no login/DB/RAG/tools/attachments/prod deploy. Context window **N = 10** turns trimmed client-side in `RunAgentInput.messages`.
 
 ## Technical Context
 
 **Language/Version**: Python 3.11+ (backend), TypeScript 5.x (frontend)
 
 **Primary Dependencies**:
-- Backend: `agno`, `openai` (via Agno model), `uvicorn`
-- Frontend: `@assistant-ui/react`, `@assistant-ui/react-markdown`, React 19, Vite 6
+- Backend: `agno[os,agui]`, `openai` (via Agno model)
+- Frontend: `@assistant-ui/react`, `@assistant-ui/react-ag-ui`, `@ag-ui/client`, React 19, Vite 6
 
-**Storage**: N/A — session-only in browser memory (FR-009); AgentOS without `db` in v1
+**Storage**: N/A — session-only in browser (FR-009); AgentOS/agent without `db`; AG-UI messages carry context per run
 
-**Testing**: pytest + httpx (backend integration); vitest (frontend unit for slice/guards)
+**Testing**: pytest + httpx (`/status`); vitest (context trim); manual quickstart for E2E
 
 **Target Platform**: Local dev — Linux/macOS; desktop browser
 
 **Project Type**: Web application (frontend + backend)
 
-**Performance Goals**: First streamed characters visible within 3s local (SC-001); visible multi-chunk streaming (SC-002)
+**Performance Goals**: SC-001 first streamed chars ≤3s local; SC-002 visible multi-chunk streaming
 
 **Constraints**:
-- Real external LLM required (no stub for acceptance)
-- Health = process listening only (`GET /info`)
-- No stream cancel control
-- Last 10 turns context window
-- Env-based backend URL only
+- AG-UI wire protocol only (no custom SSE adapter)
+- Real external LLM; health = `GET /status` listening check
+- No stream cancel UI; N=10 turn context trim
+- Env-based AG-UI endpoint URL
 
-**Scale/Scope**: Single anonymous user, single thread, local/demo use
+**Scale/Scope**: Single anonymous user, single thread, local/demo
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-| Principle | Pre-Phase 0 | Post-Phase 1 | Notes |
-|-----------|-------------|--------------|-------|
-| I. Do not distribute by default | PASS (justified) | PASS | Two processes (browser + AgentOS) required by web architecture; no extra queues/services |
-| II. Optimize for deletion | PASS | PASS | Small `backend/agent_os.py`, thin frontend runtime adapter |
-| III. Explicit dependencies | PASS | PASS | LLM key, model, AgentOS URL via env; DI in agent factory |
-| IV. Contract at boundary | PASS | PASS | `contracts/api-v1.md` v1.0.0 |
-| V. Test transformation | PASS | PASS | Unit: slice/guards/reducer; integration: `/info`, `/runs` |
-| VI. Structured events | PASS | PASS | Backend logs JSON with request_id on run/stream paths (implementation task) |
-| VII. Recovery | PASS | PASS | Local dev revert = restart process; no prod deploy scope |
-| VIII. Attention finite | N/A v1 | N/A v1 | No paging alerts in scope |
-| IX. Value at user | PASS | PASS | quickstart defines shipped = runnable locally with observability |
-| X. Commands discoverable | PASS | PASS | Root `Makefile` targets documented in quickstart |
+| Principle | Pre-Phase 0 | Post-Phase 1 (AG-UI revision) | Notes |
+|-----------|-------------|-------------------------------|-------|
+| I. Do not distribute by default | PASS | PASS | Browser + one AgentOS process; AG-UI removes need for BFF/proxy |
+| II. Optimize for deletion | PASS | PASS | `agent_os.py` + `AgUiRuntimeProvider.tsx` + trim helper — no custom protocol code |
+| III. Explicit dependencies | PASS | PASS | Env: `OPENAI_*`, `VITE_AGUI_URL`, `AGENT_OS_*` |
+| IV. Contract at boundary | PASS | PASS | `contracts/ag-ui-v1.md` documents AG-UI + Agno mount points |
+| V. Test transformation | PASS | PASS | Unit: trim; integration: `/status`; defer AG-UI parse tests to library |
+| VI. Structured events | PASS | PASS | Backend JSON logs on AG-UI runs |
+| VII. Recovery | PASS | PASS | Local restart |
+| VIII. Attention finite | N/A | N/A | — |
+| IX. Value at user | PASS | PASS | quickstart |
+| X. Commands discoverable | PASS | PASS | Makefile |
 
-**Gate result**: PASS — proceed to implementation tasks.
+**Gate result**: PASS
 
 ## Project Structure
 
@@ -61,13 +61,13 @@ Build a minimal Traditional Chinese agent chat web app: one browser thread, stre
 
 ```text
 specs/001-agent-chat-app/
-├── plan.md              # This file
-├── research.md          # Phase 0
-├── data-model.md        # Phase 1
-├── quickstart.md        # Phase 1
+├── plan.md
+├── research.md
+├── data-model.md
+├── quickstart.md
 ├── contracts/
-│   └── api-v1.md        # Phase 1
-└── tasks.md             # Phase 2 (/speckit-tasks)
+│   └── ag-ui-v1.md
+└── tasks.md             # /speckit-tasks
 ```
 
 ### Source Code (repository root)
@@ -75,14 +75,11 @@ specs/001-agent-chat-app/
 ```text
 backend/
 ├── pyproject.toml
-├── agent_os.py          # AgentOS app: agent definition + serve entry
-├── config.py            # Env-loaded settings (explicit deps)
-├── cors.py              # CORS allowlist for local frontend
+├── agent_os.py            # Agent + AgentOS + AGUI interface
+├── config.py              # Env settings
 └── tests/
-    ├── unit/
-    │   └── test_context.py
     └── integration/
-        └── test_health.py
+        └── test_status.py
 
 frontend/
 ├── package.json
@@ -95,22 +92,21 @@ frontend/
 │   │   └── assistant-ui/
 │   │       └── thread.tsx
 │   ├── runtime/
-│   │   ├── AgentOSRuntimeProvider.tsx
-│   │   ├── agentos-client.ts      # SSE fetch + parse
-│   │   └── context-window.ts      # last-N slice (N=10)
+│   │   ├── AgUiRuntimeProvider.tsx   # useAgUiRuntime + HttpAgent
+│   │   └── trim-context.ts           # sliceLastNTurns(N=10)
 │   └── lib/
-│       └── env.ts                 # VITE_AGENTOS_URL
+│       └── env.ts                    # VITE_AGUI_URL
 └── tests/
-    └── context-window.test.ts
+    └── trim-context.test.ts
 
-Makefile                   # dev, test, lint, health
+Makefile
 ```
 
-**Structure Decision**: Standard web split (`frontend/` + `backend/`) with minimal files per Principle II. No Next.js BFF — frontend calls AgentOS directly with CORS to avoid an extra hop (Principle I).
+**Structure Decision**: Web split with **zero custom streaming layer** — AG-UI protocol connects assistant-ui and Agno directly (CORS on AgentOS only).
 
 ## Complexity Tracking
 
-> No unjustified constitution violations.
+> No unjustified violations. Prior draft's custom SSE adapter removed.
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
@@ -118,29 +114,30 @@ Makefile                   # dev, test, lint, health
 
 ## Phase 0 Output
 
-See [research.md](./research.md) — all NEEDS CLARIFICATION items resolved:
-- Backend: Agno AgentOS
-- Frontend: assistant-ui ExternalStoreRuntime
-- Health: `GET /info`
-- Context N: 10 turns
-- LLM: OpenAI via env
+See [research.md](./research.md):
+- Protocol: AG-UI end-to-end
+- Backend: AgentOS + `AGUI(agent=...)`
+- Frontend: `useAgUiRuntime` + `HttpAgent`
+- Health: `GET /status`
+- Context: N=10 client trim
 
 ## Phase 1 Output
 
 | Artifact | Path |
 |----------|------|
 | Data model | [data-model.md](./data-model.md) |
-| API contract | [contracts/api-v1.md](./contracts/api-v1.md) |
+| API contract | [contracts/ag-ui-v1.md](./contracts/ag-ui-v1.md) |
 | Quickstart | [quickstart.md](./quickstart.md) |
 
 ## Implementation Notes (for `/speckit-tasks`)
 
-1. **AgentOS setup**: Single agent `chat-agent` with TC system instructions; `stream=True` on runs; no `db`.
-2. **assistant-ui**: Install Thread primitives; wire `useExternalStoreRuntime` with `isRunning` gate (disable send while streaming).
-3. **SSE adapter**: Map AgentOS run events → append assistant text; handle errors on turn.
-4. **CORS**: Allow frontend dev origin on AgentOS app.
-5. **Env**: `VITE_AGENTOS_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `AGENT_OS_PORT`.
-6. **Makefile**: `dev-backend`, `dev-frontend`, `dev`, `test`, `lint`, `health`.
+1. **Backend**: `AgentOS(agents=[chat_agent], interfaces=[AGUI(agent=chat_agent)])`; TC instructions; no `db`.
+2. **Frontend**: `HttpAgent({ url: env.VITE_AGUI_URL })` + `useAgUiRuntime({ agent })` + `Thread`.
+3. **Context trim**: Wrap agent or intercept run input — keep last 10 turns in `messages`.
+4. **Health**: `make health` → `curl -sf $AGENTOS_URL/status`.
+5. **CORS**: Enable for frontend origin on AgentOS FastAPI app.
+6. **No cancel UI**: Do not wire stop/cancel actions (FR-014).
+7. **Env**: `VITE_AGUI_URL=http://localhost:7777/agui`, `OPENAI_API_KEY`, `OPENAI_MODEL`.
 
 ## Next Command
 

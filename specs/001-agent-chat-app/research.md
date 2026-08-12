@@ -1,97 +1,118 @@
 # Research: Agent Chat App (001)
 
-**Date**: 2026-08-12  
+**Date**: 2026-08-12 (revised)  
 **Feature**: `specs/001-agent-chat-app/spec.md`  
-**User directive**: assistant-ui frontend, Agno SDK backend with AgentOS enabled
+**User directive**: assistant-ui frontend, Agno SDK backend with AgentOS enabled  
+**Revision**: Use native **AG-UI** protocol on both sides — no custom SSE adapter
 
-## 1. Backend runtime — Agno AgentOS
+## 1. Integration protocol — AG-UI (Agent-User Interaction)
 
-**Decision**: Run a single Agno `AgentOS` FastAPI app exposing one chat agent (`id="chat-agent"`) on default port `7777`.
+**Decision**: Connect frontend and backend via the [AG-UI protocol](https://github.com/ag-ui-protocol/ag-ui) end-to-end.
 
 **Rationale**:
-- Spec requires real external LLM streaming, health/status, and a backend agent — AgentOS provides `POST /agents/{agent_id}/runs` with SSE streaming out of the box.
-- Constitution Principle I: one backend deployable; AgentOS bundles agent + HTTP server without extra microservices.
-- Clarification: health = process listening → `GET /info` (public metadata) satisfies acceptance without LLM probe.
+- Both stacks ship first-class AG-UI support:
+  - **Agno**: `from agno.os.interfaces.agui import AGUI` mounted on AgentOS → `POST /agui`, `GET /status`
+  - **assistant-ui**: `@assistant-ui/react-ag-ui` + `@ag-ui/client` `HttpAgent` + `useAgUiRuntime`
+- Eliminates custom SSE parsing, manual message append logic, and protocol translation (Principle II).
+- Streaming (`TEXT_MESSAGE_*`), run lifecycle (`RUN_STARTED` / `RUN_FINISHED` / `RUN_ERROR`), and errors are handled by the runtime adapter.
 
-**Alternatives considered**:
-- Raw FastAPI + manual OpenAI streaming — rejected; duplicates AgentOS run/stream plumbing.
-- AgentOS with SQLite `db` — rejected for v1; spec FR-009 forbids database-backed chat persistence. AgentOS runs without `db` for v1; transcript lives in the browser.
+**Alternatives considered** (rejected in prior draft):
+- `useExternalStoreRuntime` + manual AgentOS `/agents/{id}/runs` SSE — reinventing wire protocol already solved by AG-UI.
+- Next.js BFF translating AI SDK ↔ AgentOS — extra hop, wrong protocol.
 
 **Key implementation notes**:
-- `from agno.os import AgentOS` + `agent_os.get_app()` / `agent_os.serve()`.
-- Agent model via env (`OPENAI_API_KEY`, model id env); instructions enforce Traditional Chinese replies.
-- Run endpoint: `POST /agents/chat-agent/runs` with `Content-Type: application/x-www-form-urlencoded`, `stream=true`.
-- Health/status for v1: `GET /info` returns 200 when process is listening (maps to FR-006 / User Story 3).
-- Enable CORS on AgentOS for local frontend origin (browser → AgentOS direct calls).
+- Backend install: `uv pip install 'agno[os,agui]' openai`
+- Backend wiring:
+  ```python
+  agent_os = AgentOS(
+      agents=[chat_agent],
+      interfaces=[AGUI(agent=chat_agent)],
+  )
+  ```
+- Frontend install: `npm install @assistant-ui/react @assistant-ui/react-ag-ui @ag-ui/client`
+- Frontend wiring:
+  ```tsx
+  const agent = new HttpAgent({ url: `${baseUrl}/agui` });
+  const runtime = useAgUiRuntime({ agent });
+  ```
+- Reference: [assistant-ui AG-UI quickstart](https://www.assistant-ui.com/docs/runtimes/ag-ui/quickstart), [Agno AG-UI interface](https://docs.agno.com/agent-os/interfaces/ag-ui/introduction)
 
-## 2. Frontend UI — assistant-ui
+## 2. Backend runtime — Agno AgentOS + AGUI interface
 
-**Decision**: React SPA (Vite) with `@assistant-ui/react`, `@assistant-ui/react-markdown`, and `useExternalStoreRuntime` wired to AgentOS SSE.
+**Decision**: Single AgentOS app with one agent and one `AGUI` interface (default prefix → `/agui`, `/status`).
 
 **Rationale**:
-- User requested assistant-ui explicitly.
-- Agno AgentOS speaks form-urlencoded SSE, not Vercel AI SDK UI streams — `useChatRuntime` / `@assistant-ui/react-ai-sdk` targets AI SDK backends and would force an unnecessary BFF.
-- `useExternalStoreRuntime` gives full control over streaming updates, send-disable during in-flight reply (FR-014), and session-only message state (FR-009).
+- Spec requires AgentOS-backed agent, streaming, health endpoint, real LLM.
+- `GET /status` is the AG-UI health/status surface (maps directly to FR-006 / User Story 3 clarification: process listening, no LLM probe).
+- No `db` on AgentOS or agent for v1 (FR-009); conversation state lives in the browser; AG-UI `RunAgentInput.messages` carries context each run.
 
 **Alternatives considered**:
-- `@assistant-ui/react-ai-sdk` + Next.js API proxy — rejected; adds a Node hop and AI SDK translation layer without v1 benefit.
-- `@assistant-ui/react-data-stream` — viable but ExternalStore maps cleanly to manual SSE chunk append for AgentOS events.
-- Plain React chat UI — rejected; user specified assistant-ui.
+- AgentOS REST `/agents/{id}/runs` without AGUI interface — lower-level; bypasses the shared protocol assistant-ui expects.
+- AgentOS with SQLite — rejected (FR-009).
 
 **Key implementation notes**:
-- Prebuilt `Thread` component from assistant-ui starter patterns.
-- `NEXT_PUBLIC_AGENTOS_URL` (or `VITE_AGENTOS_URL`) configures backend base URL (FR-007).
-- Single thread: one runtime provider instance, no thread list UI.
-- No stop/cancel button (clarification B).
+- Agent instructions: prefer Traditional Chinese replies (FR-013).
+- LLM via env: `OPENAI_API_KEY`, `OPENAI_MODEL` (default `gpt-4o-mini`).
+- CORS: allow frontend dev origin on AgentOS app for browser `HttpAgent` calls.
+- Structured logging on `/agui` runs (Principle VI) with `thread_id`, `run_id`, request correlation.
 
-## 3. Context window N
+## 3. Frontend UI — assistant-ui + react-ag-ui
 
-**Decision**: **N = 10 message turns** (counting both user and assistant messages).
-
-**Rationale**:
-- Spec requires a small fixed integer at planning time (FR-012).
-- 10 turns ≈ five exchanges — enough for P2 multi-turn demos without unbounded token growth.
-- Frontend slices `messages.slice(-N)` before each AgentOS call; full transcript remains in UI state.
-
-**Alternatives considered**:
-- N = 6 (three exchanges) — too tight for “depends on recent context” acceptance tests.
-- N = 20 — acceptable but larger LLM cost for v1 with no benefit stated in spec.
-- Server-side session history via AgentOS DB — rejected (no DB in v1).
-
-## 4. Streaming protocol mapping
-
-**Decision**: Browser `fetch` + `ReadableStream` (or `EventSource` if compatible) parses AgentOS SSE; map `RunContentEvent` text chunks to incremental assistant-ui message updates.
+**Decision**: React SPA (Vite) with assistant-ui `Thread` + `useAgUiRuntime({ agent: HttpAgent })`.
 
 **Rationale**:
-- AgentOS documents SSE by default on run endpoints (`curl -N ... stream=true`).
-- assistant-ui ExternalStore expects caller to append partial assistant content while `isRunning=true`.
+- User requested assistant-ui; `@assistant-ui/react-ag-ui` is the purpose-built adapter for AG-UI backends including Agno.
+- Runtime handles streaming text, run state (`isRunning`), and errors — satisfies FR-004, concurrent-send disable via thread `isRunning` (FR-014).
+- Single thread: default runtime, no `adapters.threadList` (spec: one thread v1).
 
 **Alternatives considered**:
-- WebSocket — not AgentOS default; unnecessary.
+- `useExternalStoreRuntime` — unnecessary when AG-UI runtime exists.
+- `@assistant-ui/react-ai-sdk` — wrong protocol (Vercel AI SDK, not AG-UI).
 
-## 5. LLM provider
+**Key implementation notes**:
+- Env: `VITE_AGUI_URL` (full URL to `POST /agui`, e.g. `http://localhost:7777/agui`) or `VITE_AGENTOS_URL` + documented `/agui` suffix (FR-007).
+- Do not expose cancel/stop UI controls (clarification: no stop in v1); rely on runtime `isRunning` to disable send.
+- Optional: `showThinking: false` for simpler v1 UI (no tools/RAG).
 
-**Decision**: OpenAI-compatible model via Agno `OpenAIChat` (or `OpenAIResponses`) with model id from `OPENAI_MODEL` env defaulting to `gpt-4o-mini`.
+## 4. Context window N = 10 turns
+
+**Decision**: Client-side trim of AG-UI messages to last **10 turns** before each run via a thin `HttpAgent` wrapper or `runConfig` hook; full transcript remains in assistant-ui thread UI.
 
 **Rationale**:
-- Clarification requires real external LLM; OpenAI is Agno’s primary documented path.
-- Credentials only via env (FR-011).
-- `gpt-4o-mini` is cost-effective for v1 local demos with strong Traditional Chinese support.
+- Spec FR-012 + clarification: last N turns, N fixed at planning.
+- Without server DB, context MUST travel in `RunAgentInput.messages` each request — AG-UI's default behavior.
+- `useAgUiRuntime` forwards thread messages automatically; trim in one pure function (`sliceLastNTurns(messages, 10)`) at the agent client boundary.
 
 **Alternatives considered**:
-- Anthropic / other providers — supported by Agno but deferred; env-swappable later without spec change.
+- Agno `num_history_messages=10` with DB — requires DB (FR-009 violation).
+- Server-side trim in custom FastAPI middleware — unnecessary; client owns transcript in v1.
 
-## 6. Testing strategy
+## 5. Health / status endpoint
+
+**Decision**: Use AG-UI interface `GET /status` (not AgentOS `GET /info`).
+
+**Rationale**:
+- Native health endpoint for the AG-UI surface the frontend actually uses.
+- Meets clarification: reports interface/process readiness without LLM connectivity check.
+- `make health` curls `{baseUrl}/status`.
+
+## 6. LLM provider
+
+**Decision**: OpenAI via Agno `OpenAIChat` or `OpenAIResponses`; model from `OPENAI_MODEL` env.
+
+**Rationale**: Clarification requires real external LLM; credentials via env only (FR-011).
+
+## 7. Testing strategy
 
 **Decision**:
-- **Unit**: pure functions — context window slice, empty-message guard, SSE chunk reducer.
-- **Integration**: httpx/pytest against AgentOS `/info` and `/agents/chat-agent/runs` (stream=false smoke with mocked LLM or recorded fixture if CI lacks keys).
-- **E2E manual**: quickstart scenarios (SC-001–SC-007).
+- **Unit**: `sliceLastNTurns` (N=10), empty-message guard (assistant-ui input validation).
+- **Integration**: httpx against `GET /status`; AG-UI run smoke via `@ag-ui/client` or recorded SSE fixture.
+- **Manual**: quickstart scenarios SC-001–SC-007.
 
-**Rationale**: Constitution Principle V — test transformations and boundaries, not framework wiring.
+**Rationale**: Test our trim transform and protocol boundaries; do not re-test AG-UI event parsing (owned by `@assistant-ui/react-ag-ui`).
 
-## 7. Command surface (Constitution X)
+## 8. Command surface (Constitution X)
 
-**Decision**: Root `Makefile` with `dev-backend`, `dev-frontend`, `dev`, `test`, `lint`, `health` — same targets documented in quickstart and used by CI.
+**Decision**: Root `Makefile` — `dev-backend`, `dev-frontend`, `dev`, `test`, `lint`, `health` (curl `/status`).
 
-**Rationale**: Principle X requires discoverable, identical local/CI commands.
+**Rationale**: Principle X — identical local/CI commands.
