@@ -26,9 +26,9 @@
 
 **Purpose**: Project scaffolding and dependency baselines for Agno AgentOS + assistant-ui AG-UI stack
 
-- [ ] T001 Create directory tree `backend/`, `backend/tests/integration/`, `frontend/src/components/assistant-ui/`, `frontend/src/runtime/`, `frontend/src/lib/`, `frontend/tests/` per plan.md
+- [X] T001 Create directory tree `backend/`, `backend/tests/integration/`, `frontend/src/components/assistant-ui/`, `frontend/src/runtime/`, `frontend/src/lib/`, `frontend/tests/` per plan.md
 - [X] T002 Initialize Python project with `agno[os,agui]` and `openai` in `backend/pyproject.toml` (`openai` required by Agno `OpenAILike` for Vercel AI Gateway)
-- [ ] T003 [P] Initialize Vite + React + TypeScript app with `@assistant-ui/react`, `@assistant-ui/react-ag-ui`, and `@ag-ui/client` in `frontend/package.json`
+- [X] T003 [P] Initialize Vite + React + TypeScript app with `@assistant-ui/react`, `@assistant-ui/react-ag-ui`, and `@ag-ui/client` in `frontend/package.json`
 - [X] T004 [P] Add root `Makefile` with targets `dev-backend`, `dev-frontend`, `dev`, `test`, `lint`, `health` (`health` = `curl -sf` to `http://$${AGENT_OS_HOST:localhost}:$${AGENT_OS_PORT:7777}/status`)
 - [X] T005 [P] Add `backend/.env.example` with `AI_GATEWAY_API_KEY`, `LLM_MODEL_ID=google/gemini-3.5-flash-lite`, optional `AI_GATEWAY_BASE_URL=https://ai-gateway.vercel.sh/v1`, `AGENT_OS_HOST`, `AGENT_OS_PORT` and `frontend/.env.example` with **`VITE_AGUI_URL` only** (example `http://localhost:7777/agui`)
 - [X] T006 [P] Add `.gitignore` entries for `backend/.env`, `frontend/.env.local`, `node_modules/`, `__pycache__/`, `.venv/`
@@ -45,8 +45,8 @@
 - [X] T008 Create AgentOS app with chat agent and `AGUI` interface (no `db`) in `backend/agent_os.py`
 - [X] T009 Enable CORS allowlist for `http://localhost:5173` and `http://127.0.0.1:5173` on the AgentOS FastAPI app in `backend/agent_os.py`
 - [X] T010 Add structured JSON logging on AG-UI runs with `request_id` (may equal `run_id`), `thread_id`, and `run_id` in `backend/agent_os.py`
-- [ ] T011 [P] Implement **`VITE_AGUI_URL` only** reader (reject missing URL) in `frontend/src/lib/env.ts`
-- [ ] T012 [P] Create Vite entry and root shell in `frontend/src/main.tsx` and `frontend/src/App.tsx`
+- [X] T011 [P] Implement **`VITE_AGUI_URL` only** reader (reject missing URL) in `frontend/src/lib/env.ts`
+- [X] T012 [P] Create Vite entry and root shell in `frontend/src/main.tsx` and `frontend/src/App.tsx`
 - [X] T013 Wire `Makefile` `dev-backend` / `dev-frontend` to AgentOS serve and Vite; keep single `health` target from T004 pointing at `/status`
 
 **Checkpoint**: Backend serves AgentOS+AGUI; frontend boots; env URLs configurable — story work can begin
@@ -62,12 +62,12 @@
 ### Implementation for User Story 1
 
 - [X] T014 [US1] Configure chat agent Traditional Chinese reply instructions and Vercel AI Gateway model via Agno `OpenAILike` (`id`/`api_key`/`base_url` from env) in `backend/agent_os.py`
-- [ ] T015 [P] [US1] Create assistant-ui `Thread` in `frontend/src/components/assistant-ui/thread.tsx` using starter primitives **without** Stop/Cancel composer actions (omit stop button from default chrome)
-- [ ] T016 [US1] Implement `useAgUiRuntime` provider with `showThinking: false` in `frontend/src/runtime/AgUiRuntimeProvider.tsx` (agent instance supplied later by T023; for US1 may use plain `HttpAgent` temporarily if needed, then swap)
-- [ ] T017 [US1] Mount `AgUiRuntimeProvider` and `Thread` in `frontend/src/App.tsx` using `VITE_AGUI_URL` from `frontend/src/lib/env.ts`
-- [ ] T018 [US1] Reject empty/whitespace-only sends in `frontend/src/runtime/AgUiRuntimeProvider.tsx` before starting a run (no new turn, no `/agui` call)
-- [ ] T019 [US1] Disable send while runtime `isRunning` and ensure no cancel/stop control is rendered (FR-014) in `frontend/src/components/assistant-ui/thread.tsx`
-- [ ] T020 [US1] Wire `onError` on `useAgUiRuntime` to surface stream/LLM errors on the assistant turn and allow a subsequent send after idle in `frontend/src/runtime/AgUiRuntimeProvider.tsx`
+- [X] T015 [P] [US1] Create assistant-ui `Thread` in `frontend/src/components/assistant-ui/thread.tsx` using starter primitives **without** Stop/Cancel composer actions (omit stop button from default chrome)
+- [X] T016 [US1] Implement `useAgUiRuntime` provider with `showThinking: false` in `frontend/src/runtime/AgUiRuntimeProvider.tsx` (agent instance supplied later by T023; for US1 may use plain `HttpAgent` temporarily if needed, then swap)
+- [X] T017 [US1] Mount `AgUiRuntimeProvider` and `Thread` in `frontend/src/App.tsx` using `VITE_AGUI_URL` from `frontend/src/lib/env.ts`
+- [X] T018 [US1] Reject empty/whitespace-only sends in `frontend/src/runtime/AgUiRuntimeProvider.tsx` before starting a run (no new turn, no `/agui` call)
+- [X] T019 [US1] Disable send while runtime `isRunning` and ensure no cancel/stop control is rendered (FR-014) in `frontend/src/components/assistant-ui/thread.tsx`
+- [X] T020 [US1] Wire `onError` on `useAgUiRuntime` to surface stream/LLM errors on the assistant turn and allow a subsequent send after idle in `frontend/src/runtime/AgUiRuntimeProvider.tsx`
 
 **Checkpoint**: US1 MVP — one-shot TC chat with streaming AG-UI reply works end-to-end
 
@@ -81,10 +81,10 @@
 
 ### Implementation for User Story 2
 
-- [ ] T021 [P] [US2] Implement `sliceLastNTurns(messages, 10)` pure helper in `frontend/src/runtime/trim-context.ts`
-- [ ] T022 [P] [US2] Add unit tests for `sliceLastNTurns` (empty, &lt;N, exactly N, &gt;N) in `frontend/tests/trim-context.test.ts`
-- [ ] T023 [US2] Implement `TrimmingHttpAgent` in `frontend/src/runtime/trimming-http-agent.ts` wrapping `@ag-ui/client` `HttpAgent` to apply `sliceLastNTurns(..., 10)` on `RunAgentInput.messages` before send; construct it in `frontend/src/runtime/AgUiRuntimeProvider.tsx`
-- [ ] T024 [US2] Add a focused unit/integration assert that a 12-turn transcript results in a run payload of length 10 in `frontend/tests/trimming-http-agent.test.ts` (mock fetch); keep full messages visible in UI state
+- [X] T021 [P] [US2] Implement `sliceLastNTurns(messages, 10)` pure helper in `frontend/src/runtime/trim-context.ts`
+- [X] T022 [P] [US2] Add unit tests for `sliceLastNTurns` (empty, &lt;N, exactly N, &gt;N) in `frontend/tests/trim-context.test.ts`
+- [X] T023 [US2] Implement `TrimmingHttpAgent` in `frontend/src/runtime/trimming-http-agent.ts` wrapping `@ag-ui/client` `HttpAgent` to apply `sliceLastNTurns(..., 10)` on `RunAgentInput.messages` before send; construct it in `frontend/src/runtime/AgUiRuntimeProvider.tsx`
+- [X] T024 [US2] Add a focused unit/integration assert that a 12-turn transcript results in a run payload of length 10 in `frontend/tests/trimming-http-agent.test.ts` (mock fetch); keep full messages visible in UI state
 
 **Checkpoint**: US1 + US2 — multi-turn single thread with N=10 context window
 
@@ -111,10 +111,10 @@
 
 **Purpose**: Docs, command surface, and quickstart validation across stories
 
-- [ ] T029 [P] Update root `README.md` with setup (Vercel AI Gateway env: `AI_GATEWAY_API_KEY`, `LLM_MODEL_ID`, optional `AI_GATEWAY_BASE_URL`), **`VITE_AGUI_URL` only**, Makefile command index, and CORS origins
+- [X] T029 [P] Update root `README.md` with setup (Vercel AI Gateway env: `AI_GATEWAY_API_KEY`, `LLM_MODEL_ID`, optional `AI_GATEWAY_BASE_URL`), **`VITE_AGUI_URL` only**, Makefile command index, and CORS origins
 - [X] T030 [P] Align `make test` / `make lint` with backend pytest and frontend vitest/eslint in `Makefile`
-- [ ] T031 Run `specs/001-agent-chat-app/quickstart.md` scenarios 1–8 including SC-001 stopwatch check and SC-007 language rubric; record gaps as follow-ups
-- [ ] T032 Confirm no login/DB/RAG/tools/attachments/prod-deploy artifacts were introduced (covers FR-008, FR-009, FR-010)
+- [X] T031 Run `specs/001-agent-chat-app/quickstart.md` scenarios 1–8 including SC-001 stopwatch check and SC-007 language rubric; record gaps as follow-ups
+- [X] T032 Confirm no login/DB/RAG/tools/attachments/prod-deploy artifacts were introduced (covers FR-008, FR-009, FR-010)
 
 ---
 
